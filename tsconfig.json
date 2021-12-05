@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES6",
+    "rootDir": "./",
+    "sourceMap": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "lib": [
+      "es2019"
+    ]
+  },
+  "include": [
+    "src/**/*",
+    "test"
+  ],
+  "exclude": [
+  ]
+}
