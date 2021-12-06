@@ -14,7 +14,6 @@ export function something() {
 }
 
 registerExpectTest(function (e) {
-  console.log(adder(5, 7).toString());
-  console.log(adder(5, 7).toString());
-  e("");
+  console.log("hall");
+  e('"\'"');
 });

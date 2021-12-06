@@ -122,8 +122,8 @@ async function go() {
           const replaced = last.replace(
             /\(["'`].*["'`]\)/,
             change.actual.includes("\n")
-              ? "(`" + change.actual + "`)"
-              : '("' + change.actual + '")'
+              ? "(`" + change.actual.replace(/`/g, "\\`") + "`)"
+              : '("' + change.actual.replace(/"/g, '\\"') + '")'
           );
           return (
             allLines.slice(0, change.lineNumber - 1).join("\n") +
