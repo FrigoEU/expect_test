@@ -1,27 +1,26 @@
-import esbuild from "esbuild";
 import child_process from "child_process";
-import ts from "typescript";
+import esbuild from "esbuild";
 import fs from "fs/promises";
-import fsSync from "fs";
 import path from "path";
 import prettier from "prettier";
+import ts from "typescript";
 
 const fileName = process.argv[2];
 
-console.log(`Running expect-test on file: ${fileName}`);
+// console.log(`Running expect-test on file: ${fileName}`);
 
 const fileNameParsed = path.parse(path.resolve(fileName));
 const whiteSpacePreservedFile = path.join(
   fileNameParsed.dir,
   "expect_test_temp" + fileNameParsed.ext
 );
-const outFile = path.join(fileNameParsed.dir, "out.js");
+const outFilePath = path.join(fileNameParsed.dir, "out.js");
 
 async function cleanup() {
   return fs
     .unlink(whiteSpacePreservedFile)
-    .then(() => fs.unlink(outFile))
-    .then(() => fs.unlink(outFile + ".map"));
+    .then(() => fs.unlink(outFilePath))
+    .then(() => fs.unlink(outFilePath + ".map"));
 }
 
 try {
@@ -41,7 +40,7 @@ async function go() {
     bundle: true,
     sourcemap: true,
     platform: "node" as const,
-    outfile: outFile,
+    outfile: outFilePath,
     mainFields: ["module", "main"],
   });
   if (res.errors.length !== 0) {
@@ -52,8 +51,8 @@ async function go() {
 
   const proc = child_process.spawn(
     `node`,
-    // ["--inspect-brk", "--enable-source-maps", "./out.js"],
-    ["--enable-source-maps", outFile],
+    // ["--inspect-brk", "--enable-source-maps", outFilePath],
+    ["--enable-source-maps", outFilePath],
     { env: { ...process.env, EXPECT_TEST: "true" } }
   );
 
@@ -79,13 +78,12 @@ async function go() {
       origSource,
       ts.ScriptTarget.Latest // langugeVersion
     );
-    let currentSourcefile: null | ts.SourceFile = null;
+    let currentSourceFile: null | ts.SourceFile = null;
 
-    let previousMarkerTwoIndex = null;
+    let previousMarkerTwoIndex = 0;
     let markerOneIndex = null;
     if (code === 0) {
       for (let i = 0; i < stdout.length; i++) {
-        debugger;
         const data = stdout[i];
         if (data === "ExpectTestMarker1") {
           markerOneIndex = i;
@@ -101,7 +99,7 @@ async function go() {
               columnNumber: parseInt(matched[3]),
             };
             const actual = stdout
-              .slice(previousMarkerTwoIndex || 0, markerOneIndex)
+              .slice(previousMarkerTwoIndex, markerOneIndex)
               .join("\n")
               .trim();
             const expected = stdout
@@ -119,18 +117,16 @@ async function go() {
                 callLocation.columnNumber
               );
 
-              const res = ts.transform(
-                oldSourceFile,
+              const res: ts.TransformationResult<ts.SourceFile> = ts.transform<ts.SourceFile>(
+                currentSourceFile || oldSourceFile,
                 [
                   (context) => {
                     const visit: ts.Visitor = (node) => {
-                      debugger;
                       if (
                         node.pos <= positionOfExpectCall &&
                         positionOfExpectCall <= node.end &&
                         node.kind === ts.SyntaxKind.CallExpression
                       ) {
-                        debugger;
                         return context.factory.createCallExpression(
                           context.factory.createIdentifier("expect"),
                           undefined,
@@ -149,26 +145,26 @@ async function go() {
                 ],
                 {}
               );
-              currentSourcefile = res.transformed[0];
+              currentSourceFile = res.transformed[0];
             }
-            previousMarkerTwoIndex = i;
+            previousMarkerTwoIndex = i + 1;
           }
         }
       }
 
-      if (currentSourcefile !== null) {
+      if (currentSourceFile !== null) {
         const printer = ts.createPrinter({
           newLine: ts.NewLineKind.LineFeed,
         });
 
-        const result = printer.printFile(currentSourcefile);
+        const result = printer.printFile(currentSourceFile);
         const newFileName = path.resolve(fileName + ".new");
         await fs.writeFile(
           newFileName,
           prettier.format(restoreWhitespace(result), { parser: "typescript" })
         );
 
-        console.log(`Wrote ${newFileName}`);
+        console.log(`Found diff, wrote ${newFileName}`);
       }
 
       await cleanup();

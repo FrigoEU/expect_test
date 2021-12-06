@@ -3,8 +3,8 @@ function expect(str: string) {
   // So we look in the stacktrace for THIS function, and then go one "up" the stack
   const stack = new Error().stack;
   const stackLines = (stack || "").split("\n");
-  const myOwnIndex = stackLines.findIndex((sl) =>
-    sl.includes("at null.expect")
+  const myOwnIndex = stackLines.findIndex(
+    (sl) => sl.includes("at null.expect") || sl.includes("at expect")
   );
   if (myOwnIndex === undefined) {
     throw new Error("ExpectTest: Failed to parse stacktrace");

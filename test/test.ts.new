@@ -9,3 +9,11 @@ class Bleb {
     expect("11");
   }
 }
+
+@ExpectTest
+class Bleb2 {
+  constructor(expect: any) {
+    console.log(adder(5, 7).toString());
+    expect("12");
+  }
+}
