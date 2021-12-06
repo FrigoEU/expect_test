@@ -1,7 +1,8 @@
 const esbuild = require("esbuild");
+const fs = require("fs/promises");
 
 const buildOptions = {
-  entryPoints: ["src/index.ts"],
+  entryPoints: ["src/cli.ts"],
   bundle: true,
   sourcemap: true,
   platform: "node",
@@ -10,4 +11,6 @@ const buildOptions = {
   external: ["esbuild"]
 };
 
-esbuild.build(buildOptions).catch(() => process.exit(1));
+esbuild.build(buildOptions)
+  .then(() => fs.copyFile("src/index.ts", "out/index.ts"))
+  .catch(() => process.exit(1));

@@ -1,186 +1,44 @@
-import child_process from "child_process";
-import esbuild from "esbuild";
-import fs from "fs/promises";
-import path from "path";
-import prettier from "prettier";
-import ts from "typescript";
-
-const fileName = process.argv[2];
-
-// console.log(`Running expect-test on file: ${fileName}`);
-
-const fileNameParsed = path.parse(path.resolve(fileName));
-const whiteSpacePreservedFile = path.join(
-  fileNameParsed.dir,
-  "expect_test_temp" + fileNameParsed.ext
-);
-const outFilePath = path.join(fileNameParsed.dir, "out.js");
-
-async function cleanup() {
-  return fs
-    .unlink(whiteSpacePreservedFile)
-    .then(() => fs.unlink(outFilePath))
-    .then(() => fs.unlink(outFilePath + ".map"));
-}
-
-try {
-  go();
-} catch {
-  cleanup();
-}
-
-async function go() {
-  await fs.writeFile(
-    whiteSpacePreservedFile,
-    preserveWhitespace(await fs.readFile(fileName, "utf-8"))
+function expect_internal(str: string): void {
+  // We're looking for the place in the source where THIS function was called
+  // So we look in the stacktrace for THIS function, and then go one "up" the stack
+  const stack = new Error().stack;
+  const stackLines = (stack || "").split("\n");
+  const myOwnIndex = stackLines.findIndex(
+    (sl) =>
+      sl.includes("at null.expect_internal") ||
+      sl.includes("at expect_internal")
   );
-
-  const res = await esbuild.build({
-    entryPoints: [whiteSpacePreservedFile],
-    bundle: true,
-    sourcemap: true,
-    platform: "node" as const,
-    outfile: outFilePath,
-    mainFields: ["module", "main"],
-  });
-  if (res.errors.length !== 0) {
-    console.error(`Failed to build`);
-    res.errors.forEach((e) => console.error(e));
-    process.exit(1);
-  }
-
-  const proc = child_process.spawn(
-    `node`,
-    // ["--inspect-brk", "--enable-source-maps", outFilePath],
-    ["--enable-source-maps", outFilePath],
-    { env: { ...process.env, EXPECT_TEST: "true" } }
-  );
-
-  const stdout: string[] = [];
-  const marker2Regex = /ExpectTestMarker2:([^:]*):(\d+):(\d+)/;
-  proc.stdout.on("data", function (data: Buffer) {
-    data
-      .toString()
-      .split("\n")
-      .forEach((str) => stdout.push(str));
-    // console.log("stdout: " + data.toString());
-  });
-
-  proc.stderr.on("data", function (data) {
-    console.error("stderr: " + data.toString());
-  });
-
-  proc.on("exit", async function (code) {
-    const parsedPath = path.parse(whiteSpacePreservedFile);
-    const origSource = await fs.readFile(whiteSpacePreservedFile, "utf8");
-    const oldSourceFile = ts.createSourceFile(
-      parsedPath.name + parsedPath.ext,
-      origSource,
-      ts.ScriptTarget.Latest // langugeVersion
-    );
-    let currentSourceFile: null | ts.SourceFile = null;
-
-    let previousMarkerTwoIndex = 0;
-    let markerOneIndex = null;
-    if (code === 0) {
-      for (let i = 0; i < stdout.length; i++) {
-        const data = stdout[i];
-        if (data === "ExpectTestMarker1") {
-          markerOneIndex = i;
-        } else {
-          const matched = data.match(marker2Regex);
-          if (matched) {
-            if (markerOneIndex === null) {
-              throw new Error("No markerOneIndex found");
-            }
-            const callLocation = {
-              file: matched[1],
-              lineNumber: parseInt(matched[2]),
-              columnNumber: parseInt(matched[3]),
-            };
-            const actual = stdout
-              .slice(previousMarkerTwoIndex, markerOneIndex)
-              .join("\n")
-              .trim();
-            const expected = stdout
-              .slice(markerOneIndex + 1, i)
-              .join("\n")
-              .trim();
-            if (
-              actual !== expected &&
-              path.resolve(whiteSpacePreservedFile) ===
-                path.resolve(callLocation.file)
-            ) {
-              const positionOfExpectCall = ts.getPositionOfLineAndCharacter(
-                oldSourceFile,
-                callLocation.lineNumber - 1,
-                callLocation.columnNumber
-              );
-
-              const res: ts.TransformationResult<ts.SourceFile> = ts.transform<ts.SourceFile>(
-                currentSourceFile || oldSourceFile,
-                [
-                  (context) => {
-                    const visit: ts.Visitor = (node) => {
-                      if (
-                        node.pos <= positionOfExpectCall &&
-                        positionOfExpectCall <= node.end &&
-                        node.kind === ts.SyntaxKind.CallExpression
-                      ) {
-                        return context.factory.createCallExpression(
-                          context.factory.createIdentifier("expect"),
-                          undefined,
-                          [context.factory.createStringLiteral(actual)]
-                        );
-                      }
-                      return ts.visitEachChild(
-                        node,
-                        (child) => visit(child),
-                        context
-                      );
-                    };
-
-                    return (node) => ts.visitNode(node, visit);
-                  },
-                ],
-                {}
-              );
-              currentSourceFile = res.transformed[0];
-            }
-            previousMarkerTwoIndex = i + 1;
-          }
-        }
-      }
-
-      if (currentSourceFile !== null) {
-        const printer = ts.createPrinter({
-          newLine: ts.NewLineKind.LineFeed,
-        });
-
-        const result = printer.printFile(currentSourceFile);
-        const newFileName = path.resolve(fileName + ".new");
-        await fs.writeFile(
-          newFileName,
-          prettier.format(restoreWhitespace(result), { parser: "typescript" })
-        );
-
-        console.log(`Found diff, wrote ${newFileName}`);
-      }
-
-      await cleanup();
-      process.exit(0);
+  if (myOwnIndex === undefined) {
+    throw new Error("ExpectTest: Failed to parse stacktrace");
+  } else {
+    debugger;
+    const lineToParse = stackLines[myOwnIndex + 1];
+    //eg: at null.<className> (/home/simon/projects/expect-test/test/test.ts:11:5)
+    const regex = /\(([^:]*):(\d+):(\d+)\)/;
+    const matched = lineToParse.match(regex);
+    if (!matched) {
+      throw new Error("ExpectTest: Failed to parse stacktrace (2)");
     } else {
-      await cleanup();
-      console.error("child process exited with code " + (code || 0).toString());
-      process.exit(code || 0);
+      const callLocation = {
+        file: matched[1],
+        lineNumber: matched[2],
+        columnNumber: matched[3],
+      };
+      // logging the expected string
+      // The testrunner process can only interact with this piece of code through stdout, so first the actual result will be logged, then the expected result, and then a marker with the line information
+      console.log("ExpectTestMarker1");
+      console.log(str);
+      console.log(
+        `ExpectTestMarker2:${callLocation.file}:${callLocation.lineNumber}:${callLocation.columnNumber}`
+      );
     }
-  });
+  }
 }
 
-// https://github.com/microsoft/TypeScript/issues/843#issuecomment-625530359
-function preserveWhitespace(content: string) {
-  return content.replace(/\n\n/g, "\n/** THIS_IS_A_NEWLINE **/");
-}
-function restoreWhitespace(content: string) {
-  return content.replace(/\/\*\* THIS_IS_A_NEWLINE \*\*\//g, "\n");
+export function registerExpectTest(
+  f: (expect: (result: string) => void) => void
+) {
+  if (process.env.EXPECT_TEST === "true") {
+    f(expect_internal);
+  }
 }

@@ -1,17 +1,16 @@
 {
   "name": "expect_test",
-  "version": "0.0.1",
-  "main": "out/index.js",
-  "files": [
-    "out/"
-  ],
-  "bin": "./out/index.js",
+  "version": "0.0.10",
+  "main": "out/index.ts",
+  "bin": "out/cli.js",
   "scripts": {
-    "start": "node esbuild.js && node out/index.js ./test/test.ts --color=always",
-    "debug": "node esbuild.js && node --inspect-brk out/index.js ./test/test.ts"
+    "start": "node esbuild.js && node out/cli.js ./test/test.ts",
+    "debug": "node esbuild.js && node --inspect-brk out/cli.js ./test/test.ts",
+    "build": "node esbuild.js",
+    "install": "npm run build"
   },
   "dependencies": {
-    "esbuild": "0.12.15"
+    "esbuild": "0.14.2"
   },
   "devDependencies": {
     "@types/colors": "^1.2.1",
