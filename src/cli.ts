@@ -17,12 +17,14 @@ async function cleanup() {
 }
 
 try {
-  go();
+  go({
+    inspect: process.argv.some((arg) => arg.includes("--inspect")),
+  });
 } catch {
   cleanup();
 }
 
-async function go() {
+async function go(flags: { inspect: boolean }) {
   const res = await esbuild.build({
     entryPoints: [fileName],
     bundle: true,
@@ -39,15 +41,15 @@ async function go() {
 
   const proc = child_process.spawn(
     `node`,
-    // ["--inspect-brk", "--enable-source-maps", outFilePath],
-    ["--enable-source-maps", outFilePath],
+    flags.inspect
+      ? ["--inspect-brk", "--enable-source-maps", outFilePath]
+      : ["--enable-source-maps", outFilePath],
     { env: { ...process.env, EXPECT_TEST: "true" } }
   );
 
   const stdout: string[] = [];
   const marker2Regex = /ExpectTestMarker2:([^:]*):(\d+):(\d+)/;
   proc.stdout.on("data", function (data: Buffer) {
-    debugger;
     data
       .toString()
       .trimEnd()
@@ -113,7 +115,6 @@ async function go() {
         const origSource = await fs.readFile(fileName, "utf8");
 
         const result: string = changesToDo.reduceRight(function (acc, change) {
-          debugger;
           const allLines = acc.split("\n");
           const linesAtEnd = allLines.slice(change.lineNumber - 1);
           const last = [linesAtEnd[0].substr(change.columnNumber - 1)]

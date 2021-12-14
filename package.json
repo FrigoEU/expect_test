@@ -1,6 +1,6 @@
 {
   "name": "expect_test",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "main": "out/index.ts",
   "bin": "out/cli.js",
   "scripts": {
