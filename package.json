@@ -1,6 +1,6 @@
 {
   "name": "expect_test",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "main": "out/index.ts",
   "bin": "out/cli.js",
   "scripts": {
@@ -10,9 +10,9 @@
     "install": "npm run build"
   },
   "dependencies": {
-    "esbuild": "0.14.2"
   },
   "devDependencies": {
+    "esbuild": "0.14.54",
     "@types/colors": "^1.2.1",
     "@types/node": "^14.17.5",
     "@types/prettier": "^2.4.2",
